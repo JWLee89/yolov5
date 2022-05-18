@@ -68,6 +68,7 @@ from models.yolo import Detect
 from utils.dataloaders import LoadImages
 from utils.general import (LOGGER, check_dataset, check_img_size, check_requirements, check_version, colorstr,
                            file_size, print_args, url2file)
+from utils.shell import ShellUtil
 from utils.torch_utils import select_device
 
 
@@ -385,22 +386,22 @@ def export_edgetpu(keras_model, im, file, prefix=colorstr('Edge TPU:')):
         cmd = 'edgetpu_compiler --version'
         help_url = 'https://coral.ai/docs/edgetpu/compiler/'
         assert platform.system() == 'Linux', f'export only supported on Linux. See {help_url}'
-        if subprocess.run(f'{cmd} >/dev/null', shell=True).returncode != 0:
+        if ShellUtil.subprocess_run(f'{cmd} >/dev/null').returncode != 0:
             LOGGER.info(f'\n{prefix} export requires Edge TPU compiler. Attempting install from {help_url}')
-            sudo = subprocess.run('sudo --version >/dev/null', shell=True).returncode == 0  # sudo installed on system
+            sudo = ShellUtil.subprocess_run('sudo --version >/dev/null').returncode == 0  # sudo installed on system
             for c in (
                     'curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -',
                     'echo "deb https://packages.cloud.google.com/apt coral-edgetpu-stable main" | sudo tee /etc/apt/sources.list.d/coral-edgetpu.list',
                     'sudo apt-get update', 'sudo apt-get install edgetpu-compiler'):
-                subprocess.run(c if sudo else c.replace('sudo ', ''), shell=True, check=True)
-        ver = subprocess.run(cmd, shell=True, capture_output=True, check=True).stdout.decode().split()[-1]
+                ShellUtil.subprocess_run(c if sudo else c.replace('sudo ', ''), check=True)
+        ver = ShellUtil.subprocess_run(cmd, capture_output=True, check=True).stdout.decode().split()[-1]
 
         LOGGER.info(f'\n{prefix} starting export with Edge TPU compiler {ver}...')
         f = str(file).replace('.pt', '-int8_edgetpu.tflite')  # Edge TPU model
         f_tfl = str(file).replace('.pt', '-int8.tflite')  # TFLite model
 
         cmd = f"edgetpu_compiler -s -o {file.parent} {f_tfl}"
-        subprocess.run(cmd, shell=True, check=True)
+        ShellUtil.subprocess_run(cmd, check=True)
 
         LOGGER.info(f'{prefix} export success, saved as {f} ({file_size(f):.1f} MB)')
         return f

@@ -68,7 +68,6 @@ from models.yolo import Detect
 from utils.dataloaders import LoadImages
 from utils.general import (LOGGER, check_dataset, check_img_size, check_requirements, check_version, colorstr,
                            file_size, print_args, url2file)
-from utils.shell import ShellUtil
 from utils.torch_utils import select_device
 
 
@@ -85,7 +84,7 @@ def export_formats():
         ['TensorFlow GraphDef', 'pb', '.pb', True],
         ['TensorFlow Lite', 'tflite', '.tflite', False],
         ['TensorFlow Edge TPU', 'edgetpu', '_edgetpu.tflite', False],
-        ['TensorFlow.js', 'tfjs', '_web_model', False],]
+        ['TensorFlow.js', 'tfjs', '_web_model', False], ]
     return pd.DataFrame(x, columns=['Format', 'Argument', 'Suffix', 'GPU'])
 
 
@@ -169,7 +168,7 @@ def export_onnx(model, im, file, opset, train, dynamic, simplify, prefix=colorst
         LOGGER.info(f'{prefix} export failure: {e}')
 
 
-def export_openvino(model, im, file, half, prefix=colorstr('OpenVINO:')):
+def export_openvino(file, half, prefix=colorstr('OpenVINO:')):
     # YOLOv5 OpenVINO export
     try:
         check_requirements(('openvino-dev',))  # requires openvino-dev: https://pypi.org/project/openvino-dev/
@@ -179,6 +178,8 @@ def export_openvino(model, im, file, half, prefix=colorstr('OpenVINO:')):
         f = str(file).replace('.pt', f'_openvino_model{os.sep}')
 
         cmd = f"mo --input_model {file.with_suffix('.onnx')} --output_dir {f} --data_type {'FP16' if half else 'FP32'}"
+        subprocess.Popen(cmd.strip().split(' '), universal_newlines=True,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         subprocess.check_output(cmd, shell=True)
 
         LOGGER.info(f'{prefix} export success, saved as {f} ({file_size(f):.1f} MB)')
@@ -325,7 +326,7 @@ def export_saved_model(model,
         return None, None
 
 
-def export_pb(keras_model, im, file, prefix=colorstr('TensorFlow GraphDef:')):
+def export_pb(keras_model, file, prefix=colorstr('TensorFlow GraphDef:')):
     # YOLOv5 TensorFlow GraphDef *.pb export https://github.com/leimao/Frozen_Graph_TensorFlow
     try:
         import tensorflow as tf
@@ -386,22 +387,23 @@ def export_edgetpu(file, prefix=colorstr('Edge TPU:')):
         cmd = 'edgetpu_compiler --version'
         help_url = 'https://coral.ai/docs/edgetpu/compiler/'
         assert platform.system() == 'Linux', f'export only supported on Linux. See {help_url}'
-        if ShellUtil.subprocess_run(f'{cmd} >/dev/null').returncode != 0:
+        if subprocess.run(f'{cmd} >/dev/null', shell=True).returncode != 0:
             LOGGER.info(f'\n{prefix} export requires Edge TPU compiler. Attempting install from {help_url}')
-            sudo = ShellUtil.subprocess_run('sudo --version >/dev/null').returncode == 0  # sudo installed on system
+            sudo = subprocess.run('sudo --version >/dev/null', shell=True).returncode == 0  # sudo installed on system
             for c in (
                     'curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -',
                     'echo "deb https://packages.cloud.google.com/apt coral-edgetpu-stable main" | sudo tee /etc/apt/sources.list.d/coral-edgetpu.list',
                     'sudo apt-get update', 'sudo apt-get install edgetpu-compiler'):
-                ShellUtil.subprocess_run(c if sudo else c.replace('sudo ', ''), check=True)
-        ver = ShellUtil.subprocess_run(cmd, capture_output=True, check=True).stdout.decode().split()[-1]
+                subprocess.run(c if sudo else c.replace('sudo ', ''), shell=True, check=True)
+        ver = subprocess.run(cmd, shell=True, capture_output=True, check=True).stdout.decode().split()[-1]
 
         LOGGER.info(f'\n{prefix} starting export with Edge TPU compiler {ver}...')
         f = str(file).replace('.pt', '-int8_edgetpu.tflite')  # Edge TPU model
         f_tfl = str(file).replace('.pt', '-int8.tflite')  # TFLite model
 
         cmd = f"edgetpu_compiler -s -o {file.parent} {f_tfl}"
-        ShellUtil.subprocess_run(cmd, check=True)
+        subprocess.Popen(cmd.strip().split(' '), universal_newlines=True,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         LOGGER.info(f'{prefix} export success, saved as {f} ({file_size(f):.1f} MB)')
         return f
@@ -409,7 +411,7 @@ def export_edgetpu(file, prefix=colorstr('Edge TPU:')):
         LOGGER.info(f'\n{prefix} export failure: {e}')
 
 
-def export_tfjs(keras_model, im, file, prefix=colorstr('TensorFlow.js:')):
+def export_tfjs(file, prefix=colorstr('TensorFlow.js:')):
     # YOLOv5 TensorFlow.js export
     try:
         check_requirements(('tensorflowjs',))
@@ -424,7 +426,10 @@ def export_tfjs(keras_model, im, file, prefix=colorstr('TensorFlow.js:')):
 
         cmd = f'tensorflowjs_converter --input_format=tf_frozen_model ' \
               f'--output_node_names="Identity,Identity_1,Identity_2,Identity_3" {f_pb} {f}'
-        subprocess.run(cmd, shell=True)
+
+        # run with shell=False, since it may be vulnerable to injections
+        subprocess.Popen(cmd.strip().split(' '), universal_newlines=True,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         with open(f_json) as j:
             json = j.read()
@@ -434,9 +439,9 @@ def export_tfjs(keras_model, im, file, prefix=colorstr('TensorFlow.js:')):
                 r'"Identity.?.?": {"name": "Identity.?.?"}, '
                 r'"Identity.?.?": {"name": "Identity.?.?"}, '
                 r'"Identity.?.?": {"name": "Identity.?.?"}}}', r'{"outputs": {"Identity": {"name": "Identity"}, '
-                r'"Identity_1": {"name": "Identity_1"}, '
-                r'"Identity_2": {"name": "Identity_2"}, '
-                r'"Identity_3": {"name": "Identity_3"}}}', json)
+                                                               r'"Identity_1": {"name": "Identity_1"}, '
+                                                               r'"Identity_2": {"name": "Identity_2"}, '
+                                                               r'"Identity_3": {"name": "Identity_3"}}}', json)
             j.write(subst)
 
         LOGGER.info(f'{prefix} export success, saved as {f} ({file_size(f):.1f} MB)')
@@ -520,7 +525,7 @@ def run(
     if onnx or xml:  # OpenVINO requires ONNX
         f[2] = export_onnx(model, im, file, opset, train, dynamic, simplify)
     if xml:  # OpenVINO
-        f[3] = export_openvino(model, im, file, half)
+        f[3] = export_openvino(file, half)
     if coreml:
         _, f[4] = export_coreml(model, im, file, int8, half)
 
@@ -540,13 +545,13 @@ def run(
                                          conf_thres=conf_thres,
                                          iou_thres=iou_thres)  # keras model
         if pb or tfjs:  # pb prerequisite to tfjs
-            f[6] = export_pb(model, im, file)
+            f[6] = export_pb(model, file)
         if tflite or edgetpu:
             f[7] = export_tflite(model, im, file, int8=int8 or edgetpu, data=data, nms=nms, agnostic_nms=agnostic_nms)
         if edgetpu:
             f[8] = export_edgetpu(file)
         if tfjs:
-            f[9] = export_tfjs(model, im, file)
+            f[9] = export_tfjs(file)
 
     # Finish
     f = [str(x) for x in f if x]  # filter out '' and None

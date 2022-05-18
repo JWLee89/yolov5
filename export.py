@@ -380,7 +380,7 @@ def export_tflite(keras_model, im, file, int8, data, nms, agnostic_nms, prefix=c
         LOGGER.info(f'\n{prefix} export failure: {e}')
 
 
-def export_edgetpu(keras_model, im, file, prefix=colorstr('Edge TPU:')):
+def export_edgetpu(file, prefix=colorstr('Edge TPU:')):
     # YOLOv5 Edge TPU export https://coral.ai/docs/edgetpu/models-intro/
     try:
         cmd = 'edgetpu_compiler --version'
@@ -544,7 +544,7 @@ def run(
         if tflite or edgetpu:
             f[7] = export_tflite(model, im, file, int8=int8 or edgetpu, data=data, nms=nms, agnostic_nms=agnostic_nms)
         if edgetpu:
-            f[8] = export_edgetpu(model, im, file)
+            f[8] = export_edgetpu(file)
         if tfjs:
             f[9] = export_tfjs(model, im, file)
 

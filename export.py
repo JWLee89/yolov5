@@ -1,6 +1,7 @@
 # YOLOv5 🚀 by Ultralytics, GPL-3.0 license
 """
 Export a YOLOv5 PyTorch model to other formats. TensorFlow exports authored by https://github.com/zldrobit
+
 Format                      | `export.py --include`         | Model
 ---                         | ---                           | ---
 PyTorch                     | -                             | yolov5s.pt
@@ -14,11 +15,14 @@ TensorFlow GraphDef         | `pb`                          | yolov5s.pb
 TensorFlow Lite             | `tflite`                      | yolov5s.tflite
 TensorFlow Edge TPU         | `edgetpu`                     | yolov5s_edgetpu.tflite
 TensorFlow.js               | `tfjs`                        | yolov5s_web_model/
+
 Requirements:
     $ pip install -r requirements.txt coremltools onnx onnx-simplifier onnxruntime openvino-dev tensorflow-cpu  # CPU
     $ pip install -r requirements.txt coremltools onnx onnx-simplifier onnxruntime-gpu openvino-dev tensorflow  # GPU
+
 Usage:
     $ python path/to/export.py --weights yolov5s.pt --include torchscript onnx openvino engine coreml tflite ...
+
 Inference:
     $ python path/to/detect.py --weights yolov5s.pt                 # PyTorch
                                          yolov5s.torchscript        # TorchScript
@@ -30,6 +34,7 @@ Inference:
                                          yolov5s.pb                 # TensorFlow GraphDef
                                          yolov5s.tflite             # TensorFlow Lite
                                          yolov5s_edgetpu.tflite     # TensorFlow Edge TPU
+
 TensorFlow.js:
     $ cd .. && git clone https://github.com/zldrobit/tfjs-yolov5-example.git && cd tfjs-yolov5-example
     $ npm install

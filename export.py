@@ -49,6 +49,7 @@ import platform
 import subprocess
 import sys
 import time
+import typing as t
 import warnings
 from pathlib import Path
 
@@ -86,6 +87,23 @@ def export_formats():
         ['TensorFlow Edge TPU', 'edgetpu', '_edgetpu.tflite', False],
         ['TensorFlow.js', 'tfjs', '_web_model', False],]
     return pd.DataFrame(x, columns=['Format', 'Argument', 'Suffix', 'GPU'])
+
+
+def gpu_export_formats():
+    formats = export_formats()
+    return formats[formats['GPU'] == True].values.tolist()
+
+
+def cpu_export_formats() -> t.List:
+    """
+    Get list of models that can be exported without gpu.
+    Note that some of these require special environments to serialize.
+    """
+    formats = export_formats()
+    return formats[formats['Format'].isin(
+        ('ONNX', 'OpenVINO', 'CoreML', 'TensorFlow SavedModel', 'TensorFlow GraphDef',
+        'TensorFlow Lite', 'TensorFlow Edge TPU', 'TensorFlow.js',)
+    )].values.tolist()
 
 
 def export_torchscript(model, im, file, optimize, prefix=colorstr('TorchScript:')):

@@ -26,12 +26,7 @@ ROOT = FILE.parents[1]  # YOLOv5 root directory
 if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))  # add ROOT to PATH
 
-# Export statements to test
-from export import (
-    cpu_export_formats,
-    gpu_export_formats,
-    run,
-)
+from export import export_formats, run
 
 # Fixtures
 # ----------------------
@@ -41,6 +36,47 @@ from export import (
 def weights(pytestconfig):
     return pytestconfig.getoption('weights')
 
+
+@pytest.fixture(scope="session")
+def my_setup(request):
+    def cleanup():
+        for _, export_format_argument, suffix, ___ in cpu_export_formats():
+            output_path = weights.replace('.pt', suffix.lower())
+            if export_format_argument == 'tflite':
+                output_path = weights.replace('.tflite', f'-int8.tflite')
+            elif export_format_argument == 'edgetpu':
+                output_path = weights.replace('.tflite', f'-int8_edgetpu.tflite')
+            shutil.rmtree(output_path, onerror=del_rw)
+    request.addfinalizer(cleanup)
+
+
+# Utils
+# ---------------------
+
+def del_rw(action, name, exc):
+    os.chmod(name, stat.S_IWRITE)
+    os.remove(name)
+
+
+def gpu_export_formats():
+    formats = export_formats()
+    return formats[formats['GPU'] == True].values.tolist()
+
+
+def cpu_export_formats() -> t.List:
+    """
+    Get list of models that can be exported without gpu.
+    Note that some of these require special environments to serialize.
+    """
+    formats = export_formats()
+    return formats[formats['Format'].isin(
+        ('ONNX', 'OpenVINO', 'CoreML', 'TensorFlow SavedModel', 'TensorFlow GraphDef',
+        'TensorFlow Lite', 'TensorFlow Edge TPU', 'TensorFlow.js',)
+    )].values.tolist()
+
+
+# Tests
+# ----------------------
 
 def test_model_exists(weights: str):
     """
@@ -84,22 +120,14 @@ def test_export_cpu(weights, export_format_row: t.List):
                 file_count += 1
                 file_is_not_empty = os.stat(file_path).st_size > 0
                 assert file_is_not_empty, f'File: "{file_path}" should not be empty.'
-
         # Serialized folder should contain at least one file
         assert file_count > 0, 'Folder is empty'
-        # cleanup: rmtree fails on folder trees containing read-only files.
-        # Need ignore_errors to remove folders containing read-only files
-        shutil.rmtree(output_path, ignore_errors=True)
     else:
         if export_format_argument == 'tflite':
             output_path = weights.replace('.tflite', f'-int8.tflite')
         elif export_format_argument == 'edgetpu':
             output_path = weights.replace('.tflite', f'-int8_edgetpu.tflite')
         assert os.path.exists(output_path), f'Failed to serialize "{output_path}".'
-
-        # cleanup. We need to change permission to delete some files
-        os.chmod(output_path, stat.S_IWRITE)
-        os.remove(output_path)
 
     # TODO: we can add new tests to check mAP of the exported model on VOC dataset
 

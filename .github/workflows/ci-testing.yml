@@ -100,3 +100,4 @@ jobs:
           # Weights should be available from previous workflow
           weights=runs/train/exp/weights/best.pt
           pytest tests --weights $weights
+x

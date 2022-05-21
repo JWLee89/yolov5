@@ -1,7 +1,6 @@
 # YOLOv5 🚀 by Ultralytics, GPL-3.0 license
 """
 Export a YOLOv5 PyTorch model to other formats. TensorFlow exports authored by https://github.com/zldrobit
-
 Format                      | `export.py --include`         | Model
 ---                         | ---                           | ---
 PyTorch                     | -                             | yolov5s.pt
@@ -15,14 +14,11 @@ TensorFlow GraphDef         | `pb`                          | yolov5s.pb
 TensorFlow Lite             | `tflite`                      | yolov5s.tflite
 TensorFlow Edge TPU         | `edgetpu`                     | yolov5s_edgetpu.tflite
 TensorFlow.js               | `tfjs`                        | yolov5s_web_model/
-
 Requirements:
     $ pip install -r requirements.txt coremltools onnx onnx-simplifier onnxruntime openvino-dev tensorflow-cpu  # CPU
     $ pip install -r requirements.txt coremltools onnx onnx-simplifier onnxruntime-gpu openvino-dev tensorflow  # GPU
-
 Usage:
     $ python path/to/export.py --weights yolov5s.pt --include torchscript onnx openvino engine coreml tflite ...
-
 Inference:
     $ python path/to/detect.py --weights yolov5s.pt                 # PyTorch
                                          yolov5s.torchscript        # TorchScript
@@ -34,7 +30,6 @@ Inference:
                                          yolov5s.pb                 # TensorFlow GraphDef
                                          yolov5s.tflite             # TensorFlow Lite
                                          yolov5s_edgetpu.tflite     # TensorFlow Edge TPU
-
 TensorFlow.js:
     $ cd .. && git clone https://github.com/zldrobit/tfjs-yolov5-example.git && cd tfjs-yolov5-example
     $ npm install
@@ -49,7 +44,6 @@ import platform
 import subprocess
 import sys
 import time
-import typing as t
 import warnings
 from pathlib import Path
 
@@ -87,23 +81,6 @@ def export_formats():
         ['TensorFlow Edge TPU', 'edgetpu', '_edgetpu.tflite', False],
         ['TensorFlow.js', 'tfjs', '_web_model', False],]
     return pd.DataFrame(x, columns=['Format', 'Argument', 'Suffix', 'GPU'])
-
-
-def gpu_export_formats():
-    formats = export_formats()
-    return formats[formats['GPU'] == True].values.tolist()
-
-
-def cpu_export_formats() -> t.List:
-    """
-    Get list of models that can be exported without gpu.
-    Note that some of these require special environments to serialize.
-    """
-    formats = export_formats()
-    return formats[formats['Format'].isin(
-        ('ONNX', 'OpenVINO', 'CoreML', 'TensorFlow SavedModel', 'TensorFlow GraphDef',
-        'TensorFlow Lite', 'TensorFlow Edge TPU', 'TensorFlow.js',)
-    )].values.tolist()
 
 
 def export_torchscript(model, im, file, optimize, prefix=colorstr('TorchScript:')):
@@ -186,7 +163,7 @@ def export_onnx(model, im, file, opset, train, dynamic, simplify, prefix=colorst
         LOGGER.info(f'{prefix} export failure: {e}')
 
 
-def export_openvino(model, im, file, half, prefix=colorstr('OpenVINO:')):
+def export_openvino(file, half, prefix=colorstr('OpenVINO:')):
     # YOLOv5 OpenVINO export
     try:
         check_requirements(('openvino-dev',))  # requires openvino-dev: https://pypi.org/project/openvino-dev/
@@ -196,7 +173,7 @@ def export_openvino(model, im, file, half, prefix=colorstr('OpenVINO:')):
         f = str(file).replace('.pt', f'_openvino_model{os.sep}')
 
         cmd = f"mo --input_model {file.with_suffix('.onnx')} --output_dir {f} --data_type {'FP16' if half else 'FP32'}"
-        subprocess.check_output(cmd, shell=True)
+        subprocess.check_output(cmd.split())
 
         LOGGER.info(f'{prefix} export success, saved as {f} ({file_size(f):.1f} MB)')
         return f
@@ -342,7 +319,7 @@ def export_saved_model(model,
         return None, None
 
 
-def export_pb(keras_model, im, file, prefix=colorstr('TensorFlow GraphDef:')):
+def export_pb(keras_model, file, prefix=colorstr('TensorFlow GraphDef:')):
     # YOLOv5 TensorFlow GraphDef *.pb export https://github.com/leimao/Frozen_Graph_TensorFlow
     try:
         import tensorflow as tf
@@ -397,7 +374,7 @@ def export_tflite(keras_model, im, file, int8, data, nms, agnostic_nms, prefix=c
         LOGGER.info(f'\n{prefix} export failure: {e}')
 
 
-def export_edgetpu(keras_model, im, file, prefix=colorstr('Edge TPU:')):
+def export_edgetpu(file, prefix=colorstr('Edge TPU:')):
     # YOLOv5 Edge TPU export https://coral.ai/docs/edgetpu/models-intro/
     try:
         cmd = 'edgetpu_compiler --version'
@@ -418,7 +395,7 @@ def export_edgetpu(keras_model, im, file, prefix=colorstr('Edge TPU:')):
         f_tfl = str(file).replace('.pt', '-int8.tflite')  # TFLite model
 
         cmd = f"edgetpu_compiler -s -o {file.parent} {f_tfl}"
-        subprocess.run(cmd, shell=True, check=True)
+        subprocess.run(cmd.split(), check=True)
 
         LOGGER.info(f'{prefix} export success, saved as {f} ({file_size(f):.1f} MB)')
         return f
@@ -426,7 +403,7 @@ def export_edgetpu(keras_model, im, file, prefix=colorstr('Edge TPU:')):
         LOGGER.info(f'\n{prefix} export failure: {e}')
 
 
-def export_tfjs(keras_model, im, file, prefix=colorstr('TensorFlow.js:')):
+def export_tfjs(file, prefix=colorstr('TensorFlow.js:')):
     # YOLOv5 TensorFlow.js export
     try:
         check_requirements(('tensorflowjs',))
@@ -440,8 +417,8 @@ def export_tfjs(keras_model, im, file, prefix=colorstr('TensorFlow.js:')):
         f_json = f'{f}/model.json'  # *.json path
 
         cmd = f'tensorflowjs_converter --input_format=tf_frozen_model ' \
-              f'--output_node_names="Identity,Identity_1,Identity_2,Identity_3" {f_pb} {f}'
-        subprocess.run(cmd, shell=True)
+              f'--output_node_names=Identity,Identity_1,Identity_2,Identity_3 {f_pb} {f}'
+        subprocess.run(cmd.split())
 
         with open(f_json) as j:
             json = j.read()
@@ -537,7 +514,7 @@ def run(
     if onnx or xml:  # OpenVINO requires ONNX
         f[2] = export_onnx(model, im, file, opset, train, dynamic, simplify)
     if xml:  # OpenVINO
-        f[3] = export_openvino(model, im, file, half)
+        f[3] = export_openvino(file, half)
     if coreml:
         _, f[4] = export_coreml(model, im, file, int8, half)
 
@@ -557,13 +534,13 @@ def run(
                                          conf_thres=conf_thres,
                                          iou_thres=iou_thres)  # keras model
         if pb or tfjs:  # pb prerequisite to tfjs
-            f[6] = export_pb(model, im, file)
+            f[6] = export_pb(model, file)
         if tflite or edgetpu:
             f[7] = export_tflite(model, im, file, int8=int8 or edgetpu, data=data, nms=nms, agnostic_nms=agnostic_nms)
         if edgetpu:
-            f[8] = export_edgetpu(model, im, file)
+            f[8] = export_edgetpu(file)
         if tfjs:
-            f[9] = export_tfjs(model, im, file)
+            f[9] = export_tfjs(file)
 
     # Finish
     f = [str(x) for x in f if x]  # filter out '' and None

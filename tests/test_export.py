@@ -37,25 +37,29 @@ def weights(pytestconfig):
     return pytestconfig.getoption('weights')
 
 
-@pytest.fixture(scope="session")
-def my_setup(request):
-    def cleanup():
-        for _, export_format_argument, suffix, ___ in cpu_export_formats():
-            output_path = weights.replace('.pt', suffix.lower())
-            if export_format_argument == 'tflite':
-                output_path = weights.replace('.tflite', f'-int8.tflite')
-            elif export_format_argument == 'edgetpu':
-                output_path = weights.replace('.tflite', f'-int8_edgetpu.tflite')
-            shutil.rmtree(output_path, onerror=del_rw)
-    request.addfinalizer(cleanup)
+@pytest.fixture(scope='session')
+def cleanup(weights):
+    yield
+    for _, export_format_argument, suffix, ___ in cpu_export_formats():
+        output_path = weights.replace('.pt', suffix.lower())
+        if export_format_argument == 'tflite':
+            output_path = output_path.replace('.tflite', f'-int8.tflite')
+        elif export_format_argument == 'edgetpu':
+            output_path = output_path.replace('.tflite', f'-int8_edgetpu.tflite')
+        if os.path.exists(output_path):
+            if os.path.isdir(output_path):
+                shutil.rmtree(output_path, onerror=del_rw)
+            else:
+                os.chmod(output_path, stat.S_IWRITE)
+                os.remove(output_path)
 
 
 # Utils
 # ---------------------
 
-def del_rw(action, name, exc):
-    os.chmod(name, stat.S_IWRITE)
-    os.remove(name)
+def del_rw(action, file_path, exc):
+    os.chmod(file_path, stat.S_IWRITE)
+    os.remove(file_path)
 
 
 def gpu_export_formats():
@@ -89,6 +93,7 @@ def test_model_exists(weights: str):
     assert os.path.exists(weights), f'Weights could not be found in: "{weights}"'
 
 
+@pytest.mark.usefixtures('cleanup')
 @pytest.mark.parametrize('export_format_row', cpu_export_formats())
 def test_export_cpu(weights, export_format_row: t.List):
     _, export_format_argument, suffix, ___ = export_format_row
@@ -109,7 +114,7 @@ def test_export_cpu(weights, export_format_row: t.List):
     # create the model
     run(weights=weights, imgsz=img_sz, include=(export_format_argument,), int8=True)
     output_path = weights.replace('.pt', suffix.lower())
-    
+
     if os.path.isdir(output_path):
         # For now, we do a simple check to see whether files are not empty
         directory = os.fsencode(output_path)
